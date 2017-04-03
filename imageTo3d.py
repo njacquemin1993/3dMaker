@@ -115,11 +115,37 @@ def main(src_path, img_dic):
     ax.set_xlim(-300, 300)
     ax.set_ylim(-300, 300)
     ax.set_zlim(0, 600)
-    plt.show()
-    print(len(list_coords))
+    #plt.show()
+    coords_to_obj(list_coords)
+
+def coords_to_obj(coords):
+    dic_coords = {}
+    for x,y,z in coords:
+        if z not in dic_coords:
+            dic_coords[z] = []
+        dic_coords[z].append({'x':x, 'y':y, 'r': np.sqrt(x*x+y*y), 'a':np.arctan2(y, x)})
     with open('out.obj', 'w') as f:
-        for c in list_coords:
-            f.write('v {} {} {}\n'.format(c[0], c[1], c[2]))
+        dic_keys = sorted(dic_coords.keys())
+        for i, z in enumerate(dic_keys):
+            if z == dic_keys[-1] or z == dic_keys[0]:
+                layer = sorted(dic_coords[z], key=lambda x: x['a'])
+                for point in layer:
+                    f.write('v {} {} {}\n'.format(point['x'], point['y'], z))
+                f.write('f')
+                for count in range(len(layer)):
+                    f.write(' {}'.format(count-len(layer)))
+                f.write('\n\n')
+            else:
+                layer_1 = sorted(dic_coords[z], key=lambda x: x['a'])
+                layer_2 = sorted(dic_coords[dic_keys[i+1]], key=lambda x: x['a'])
+                for count in range(len(layer_1)):
+                    f.write('v {} {} {}\n'.format(layer_1[count]['x'], layer_1[count]['y'], z))
+                    f.write('v {} {} {}\n'.format(layer_1[(count+1)%len(layer_1)]['x'], layer_1[(count+1)%len(layer_1)]['y'], z))
+                    f.write('v {} {} {}\n'.format(layer_2[(count+1)%len(layer_2)]['x'], layer_2[(count+1)%len(layer_2)]['y'], z))
+                    f.write('v {} {} {}\n'.format(layer_2[count]['x'], layer_2[count]['y'], z))
+                    f.write('f -4 -3 -2 -1\n\n')
+     #   for c in list_coords:
+      #      f.write('v {} {} {}\n'.format(c[0], c[1], c[2]))
 
 if __name__ == "__main__":
     source_path = "."
