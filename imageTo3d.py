@@ -64,6 +64,8 @@ def interpolate_full(coords):
     for i in range(601):
         tmp = interpolate_slice([(x[0],x[2]) for x in coords if x[1] <= i+0.5 and x[1] > i-0.5])
         for x in tmp:
+            if max(x) > 1000:
+                print(x)
             interpolated.append((x[0], x[1], i))
     return interpolated
 
@@ -88,7 +90,7 @@ def clean_data(coords):
     data = np.c_[[x[0] for x in data], [x[1] for x in data]]
     return theta, data
 
-def interpolate_slice(coords):
+def interpolate_slice(coords): #TODO find bug
     if len(coords)>0:
         theta, data = clean_data(coords)
         cs = CubicSpline(theta, data, bc_type='periodic')
@@ -116,36 +118,67 @@ def main(src_path, img_dic):
     ax.set_ylim(-300, 300)
     ax.set_zlim(0, 600)
     #plt.show()
-    coords_to_obj(list_coords)
+    coords_to_stl(list_coords)
 
-def coords_to_obj(coords):
+def coords_to_stl(coords):
     dic_coords = {}
     for x,y,z in coords:
         if z not in dic_coords:
             dic_coords[z] = []
         dic_coords[z].append({'x':x, 'y':y, 'r': np.sqrt(x*x+y*y), 'a':np.arctan2(y, x)})
-    with open('out.obj', 'w') as f:
+    list_remove = []
+    for z in dic_coords:
+        x = [toto['x'] for toto in dic_coords[z]]
+        y = [toto['y'] for toto in dic_coords[z]]
+        if max(max(x), max(y)) > 1000:
+            list_remove.append(z)
+    for z in list_remove:
+        del dic_coords[z]
+    with open('out.stl', 'w') as f:
         dic_keys = sorted(dic_coords.keys())
+        f.write('solid name\n\n')
         for i, z in enumerate(dic_keys):
             if z == dic_keys[-1] or z == dic_keys[0]:
                 layer = sorted(dic_coords[z], key=lambda x: x['a'])
-                for point in layer:
-                    f.write('v {} {} {}\n'.format(point['x'], point['y'], z))
-                f.write('f')
-                for count in range(len(layer)):
-                    f.write(' {}'.format(count-len(layer)))
-                f.write('\n\n')
+                length = len(layer)
+                for c in range(length):
+                    point1 = (layer[c]['x'], layer[c]['y'], z)
+                    point2 = (layer[(c+1)%length]['x'], layer[(c+1)%length]['y'], z)
+                    point3 = (0, 0, z)
+                    write_triangle(f, point1, point2, point3)
             else:
                 layer_1 = sorted(dic_coords[z], key=lambda x: x['a'])
                 layer_2 = sorted(dic_coords[dic_keys[i+1]], key=lambda x: x['a'])
-                for count in range(len(layer_1)):
-                    f.write('v {} {} {}\n'.format(layer_1[count]['x'], layer_1[count]['y'], z))
-                    f.write('v {} {} {}\n'.format(layer_1[(count+1)%len(layer_1)]['x'], layer_1[(count+1)%len(layer_1)]['y'], z))
-                    f.write('v {} {} {}\n'.format(layer_2[(count+1)%len(layer_2)]['x'], layer_2[(count+1)%len(layer_2)]['y'], z))
-                    f.write('v {} {} {}\n'.format(layer_2[count]['x'], layer_2[count]['y'], z))
-                    f.write('f -4 -3 -2 -1\n\n')
-     #   for c in list_coords:
-      #      f.write('v {} {} {}\n'.format(c[0], c[1], c[2]))
+                length = len(layer_1)
+                for c in range(length):
+                    point1 = (layer_1[c]['x'], layer_1[c]['y'], z)
+                    point2 = (layer_1[(c+1)%length]['x'], layer_1[(c+1)%length]['y'], z)
+                    point3 = (layer_2[c]['x'], layer_2[c]['y'], dic_keys[i+1])
+                    point4 = (layer_2[(c+1)%length]['x'], layer_2[(c+1)%length]['y'], dic_keys[i+1])
+                    write_triangle(f, point1, point2, point3)
+                    write_triangle(f, point4, point2, point3)
+        f.write('endsolid name')
+         
+def write_triangle(f, p1, p2, p3):
+    normal = get_normal(p1, p2, p3)
+    f.write('facet normal {} {} {}\n'.format(normal[0], normal[1], normal[2]))
+    f.write('\touter loop\n')
+    f.write('\t\tvertex {} {} {}\n'.format(p1[0], p1[1], p1[2]))
+    f.write('\t\tvertex {} {} {}\n'.format(p2[0], p2[1], p2[2]))
+    f.write('\t\tvertex {} {} {}\n'.format(p3[0], p3[1], p3[2]))
+    f.write('\tendloop\n')
+    f.write('endfacet\n\n')
+
+def get_normal(p1, p2, p3):
+    v1 = [p1[i]-p2[i] for i in range(3)]
+    v2 = [p1[i]-p3[i] for i in range(3)]
+    x = v1[1]*v2[2] - v1[2]*v2[1]
+    y = v1[2]*v2[0] - v1[0]*v2[2]
+    z = v1[0]*v2[1] - v1[1]*v2[0]
+    n = np.sqrt(x*x+y*y+z*z)
+    if n==0:
+        n=1
+    return (x/n, y/n, z/n)
 
 if __name__ == "__main__":
     source_path = "."
