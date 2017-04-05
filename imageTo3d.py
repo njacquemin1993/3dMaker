@@ -81,7 +81,7 @@ def sort_and_clean(data):
 def clean_data(coords):
     x = [x[0] for x in coords]
     y = [x[1] for x in coords]
-    theta = [np.arctan2(x[1], x[0]) for x in coords]
+    theta = [np.arctan2(x[1], x[0])%(np.pi*2) for x in coords]
     data = zip(x, y, theta)
     data = sort_and_clean(data)
     data.append(data[0])
@@ -90,12 +90,32 @@ def clean_data(coords):
     data = np.c_[[x[0] for x in data], [x[1] for x in data]]
     return theta, data
 
-def interpolate_slice(coords): #TODO find bug
+def interpolate_slice_old(coords): #TODO find bug
     if len(coords)>0:
         theta, data = clean_data(coords)
         cs = CubicSpline(theta, data, bc_type='periodic')
         xs = 2 * np.pi * np.linspace(0, 1, 100)
         coords = [(cs(x)[0], cs(x)[1]) for x in xs]
+    return coords
+    
+def approx(x, angles, coords):
+    i = 0
+    while x <= angles[len(angles)-1-i] and i < len(angles)-1:
+        i += 1
+    i = len(angles)-1-i
+    coord1 = coords[i]
+    coord2 = coords[(i+1)%len(coords)]
+    r1 = np.sqrt(coord1[0]**2 + coord1[1]**2)
+    r2 = np.sqrt(coord2[0]**2 + coord2[1]**2)
+    r = r1 + (r2-r1)*((x - angles[i])%(np.pi*2))/((angles[(i+1)%len(coords)]-angles[i])%(np.pi*2))
+    return (r*np.cos(x), r*np.sin(x))
+    
+def interpolate_slice(coords):
+    if len(coords)>0:
+        theta, data = clean_data(coords)
+        angles = 2 * np.pi * np.linspace(0, 1, 100)
+        exit
+        coords = [approx(angle, theta, data) for angle in angles]
     return coords
     
 def main(src_path, img_dic):
@@ -117,7 +137,7 @@ def main(src_path, img_dic):
     ax.set_xlim(-300, 300)
     ax.set_ylim(-300, 300)
     ax.set_zlim(0, 600)
-    #plt.show()
+    plt.show()
     coords_to_stl(list_coords)
 
 def coords_to_stl(coords):
